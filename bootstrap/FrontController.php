@@ -42,4 +42,56 @@ class FrontController {
 			exit;
 		}
 	}
+
+	public function route()
+	{
+		$arrPath = self::URItoArray(ltrim($this->request->getPathInfo(), '/'));
+
+		//Check the language. We don't consider it part of the route.
+		if(is_numeric(array_search($arrPath[0], Settings::$availableLangs))) {
+			$this->lang = $arrPath[0];
+
+			array_shift($arrPath);
+			if(empty($arrPath)) {
+				array_push($arrPath, "");
+			}
+		}
+
+		$this->ProcessRequest($arrPath);
+		return;
+	}
+
+	public function dispatch()
+	{
+
+		Loader::configureORM();
+
+		//Load the Controller
+		if($this->isController($this->controller))
+		{
+			//Here we run the filters that are registered to the route
+			Router::runFilters($this->route);
+
+			$filename = DOCROOT . CONTROLLERS_PATH . $this->controller . '.php';
+			require_once $filename;
+			$cName = $this->controller;
+			$controller = new $cName();
+			$controller->setLang($this->lang);
+
+			//Execute Pre Action
+			$controller->before_action($this->action, $this->parameters);
+
+			//Execute Modules
+			foreach($this->route->modules as $module)
+			{
+				$module->execute(Request::createFromGlobals());
+			}
+
+			//Execute Action
+			Loader::runController($controller, $this->action, $this->parameters);
+		} else
+		{
+			throw new ControllerNotFoundException("Controller " . $this->controller . " not found!");
+		}
+	}
 }
